@@ -54,6 +54,10 @@ is needed. Alternatively, set the
 `SPEECHMATICS_API_KEY` environment variable; an explicit `--credentials` file takes precedence.
 Never place a real key in `examples/`.
 
+As a second safety boundary, supported media extensions, SRT files, `transcripts/` directories,
+and files named `speechmatics-api-key.*` are ignored anywhere in this repository. Keep source
+media under `.local/media/`; never force-add ignored customer data with `git add -f`.
+
 ## 1. Start a transcription job
 
 Without extra options, the command loads the packaged

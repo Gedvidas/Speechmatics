@@ -18,6 +18,11 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
         ".local/media/customer-interview.mp3",
         ".local/transcripts/abc123.json",
         ".local/transcripts/abc123.srt",
+        "speechmatics-api-key.json",
+        "customer-interview.wav",
+        "customer-interview.mp4",
+        "customer-interview.srt",
+        "exports/transcripts/abc123.json",
     ],
 )
 def test_private_workspace_is_gitignored(private_path: str) -> None:
@@ -41,6 +46,22 @@ def test_no_private_workspace_file_is_tracked() -> None:
         capture_output=True,
     )
     assert result.stdout == b""
+
+
+def test_no_customer_media_or_real_key_name_is_tracked() -> None:
+    if shutil.which("git") is None:
+        pytest.skip("Git is not available.")
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+    )
+    tracked = [Path(value) for value in result.stdout.decode().split("\0") if value]
+    media_suffixes = {".wav", ".mp3", ".aac", ".ogg", ".mpeg", ".amr", ".m4a", ".mp4", ".flac", ".srt"}
+
+    assert not any(path.suffix.lower() in media_suffixes for path in tracked)
+    assert not any(path.name.startswith("speechmatics-api-key.") for path in tracked)
 
 
 def test_committed_credentials_example_contains_placeholder_only() -> None:

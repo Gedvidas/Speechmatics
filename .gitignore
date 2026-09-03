@@ -10,3 +10,17 @@ dist/
 
 # API keys, source media, transcripts, and local run artifacts.
 .local/
+
+# Defense in depth: never stage customer media or a misplaced real key from this repository.
+speechmatics-api-key.*
+*.wav
+*.mp3
+*.aac
+*.ogg
+*.mpeg
+*.amr
+*.m4a
+*.mp4
+*.flac
+*.srt
+transcripts/
