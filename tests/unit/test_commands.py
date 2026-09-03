@@ -23,15 +23,25 @@ def start_args(**overrides: object) -> Namespace:
     return Namespace(**values)
 
 
-def test_start_defaults_are_explicit_and_safe() -> None:
+def test_start_defaults_match_requested_speechmatics_preset() -> None:
     config = load_config(start_args())
 
     assert config == {
         "type": "transcription",
         "transcription_config": {
-            "language": "en",
-            "model": "standard",
+            "language": "lt",
+            "model": "enhanced",
             "diarization": "none",
+            "punctuation_overrides": {
+                "sensitivity": 0.5,
+                "permitted_marks": [",", ".", "?", "!"],
+            },
+        },
+        "output_config": {
+            "srt_overrides": {
+                "max_line_length": 37,
+                "max_lines": 2,
+            }
         },
     }
 

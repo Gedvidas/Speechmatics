@@ -1,0 +1,23 @@
+{
+  "type": "transcription",
+  "transcription_config": {
+    "language": "lt",
+    "model": "enhanced",
+    "diarization": "none",
+    "punctuation_overrides": {
+      "sensitivity": 0.5,
+      "permitted_marks": [
+        ",",
+        ".",
+        "?",
+        "!"
+      ]
+    }
+  },
+  "output_config": {
+    "srt_overrides": {
+      "max_line_length": 37,
+      "max_lines": 2
+    }
+  }
+}

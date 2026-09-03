@@ -13,6 +13,7 @@ These instructions apply to the entire repository.
 
 - `auth.py` is the only module that reads and validates API keys.
 - `client.py` is the only module that makes Speechmatics HTTP requests.
+- `data/job-defaults.json` contains the repository-wide default transcription preset.
 - `start.py`, `poll.py`, and `download.py` own command-specific argument parsing and output.
 - Files under `scripts/` remain thin executable wrappers; business logic belongs in `src/`.
 - Authentication is always sent in the `Authorization` header, never in a URL or log.

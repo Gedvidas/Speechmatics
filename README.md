@@ -56,7 +56,18 @@ Never place a real key in `examples/`.
 
 ## 1. Start a transcription job
 
-English, standard model, and no diarization are the safe defaults:
+Without extra options, the command loads the packaged
+`src/speechmatics_tools/data/job-defaults.json` preset:
+
+- Lithuanian (`lt`);
+- enhanced model;
+- diarization off;
+- punctuation on with sensitivity `0.5` and marks `, . ? !`;
+- SRT formatting at 37 characters per line and 2 lines per subtitle section;
+- custom dictionary, translation, audio filtering, summary, topics, chapters, and audio events
+  off (their optional config sections are omitted).
+
+Start a job with those defaults:
 
 ```powershell
 python scripts\start_transcription.py "C:\media\interview.mp3"
@@ -75,7 +86,9 @@ python scripts\start_transcription.py "C:\media\interview.mp3" `
 The command prints the Speechmatics creation response, including the job `id`. For advanced
 features, copy and edit `examples/job-config.example.json`, then submit it with `--config`.
 Explicit `--language`, `--model`, `--diarization`, and `--title` options override the matching
-fields from that JSON file.
+fields from that JSON file. To change repository-wide defaults, edit
+`src/speechmatics_tools/data/job-defaults.json`; JSON is used because it maps directly to the
+Speechmatics `JobConfig` request without an additional parser or dependency.
 
 ## 2. Poll transcription status
 
@@ -138,6 +151,8 @@ Speechmatics/
 │   ├── poll_transcription.py
 │   └── download_transcription.py
 ├── src/speechmatics_tools/
+│   ├── data/job-defaults.json
+│   └── ...
 ├── tests/
 ├── AGENTS.md
 └── pyproject.toml

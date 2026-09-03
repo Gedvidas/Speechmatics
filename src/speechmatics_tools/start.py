@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Sequence
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,8 @@ from .cli_common import (
 )
 from .errors import ValidationError
 
+DEFAULT_CONFIG_RESOURCE = "data/job-defaults.json"
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -25,11 +28,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("media", help="Local audio or video file.")
     parser.add_argument("--config", help="Advanced Speechmatics JobConfig JSON file.")
-    parser.add_argument("--language", help="Transcription language (default: en).")
+    parser.add_argument("--language", help="Transcription language (default: lt).")
     parser.add_argument(
         "--model",
         choices=("standard", "enhanced", "melia-1"),
-        help="Speechmatics transcription model (default: standard).",
+        help="Speechmatics transcription model (default: enhanced).",
     )
     parser.add_argument(
         "--diarization",
@@ -54,14 +57,12 @@ def load_config(args: argparse.Namespace) -> dict[str, Any]:
             raise ValidationError(f"Job config is not valid JSON: {path}") from exc
         config: dict[str, Any] = dict(require_json_object(value, "Job config"))
     else:
-        config = {
-            "type": "transcription",
-            "transcription_config": {
-                "language": "en",
-                "model": "standard",
-                "diarization": "none",
-            },
-        }
+        try:
+            resource = files("speechmatics_tools").joinpath(DEFAULT_CONFIG_RESOURCE)
+            value = json.loads(resource.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValidationError("Packaged default job config is invalid.") from exc
+        config = dict(require_json_object(value, "Default job config"))
 
     transcription = config.get("transcription_config")
     if not isinstance(transcription, dict):

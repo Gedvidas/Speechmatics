@@ -25,6 +25,8 @@ POST /v2/jobs  --------------------> job id
 ## Boundaries
 
 - `auth.py` resolves `.local`, optional environment variables, and credential formats.
+- `data/job-defaults.json` is the packaged default `JobConfig`; an explicit `--config` replaces
+  it, and selected CLI arguments can override either source.
 - `client.py` validates job IDs, media types, configuration, regional endpoints, response status,
   and transcript content.
 - `start.py`, `poll.py`, and `download.py` translate command-line options into client calls and
