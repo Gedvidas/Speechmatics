@@ -21,3 +21,16 @@ jobs:
       - run: python -m mypy src scripts
       - run: python -m pytest -q
       - run: python -m compileall -q src scripts
+      - run: git diff --check
+      - name: Verify private workspace is untracked
+        run: test -z "$(git ls-files -- .local)"
+      - name: Build distributions
+        run: python -m build
+      - name: Smoke-test installed wheel
+        run: |
+          python -m venv .local/wheel-smoke
+          .local/wheel-smoke/bin/python -m pip install dist/*.whl
+          .local/wheel-smoke/bin/speechmatics-start --help
+          .local/wheel-smoke/bin/speechmatics-poll --help
+          .local/wheel-smoke/bin/speechmatics-download --help
+          .local/wheel-smoke/bin/python -c "from importlib.resources import files; assert files('speechmatics_tools').joinpath('data/job-defaults.json').is_file()"

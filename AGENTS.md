@@ -36,6 +36,7 @@ python -m ruff check .
 python -m mypy src scripts
 python -m pytest -q
 python -m compileall -q src scripts
+python -m build
 git diff --check
 ```
 

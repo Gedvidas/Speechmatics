@@ -188,10 +188,13 @@ python -m ruff check .
 python -m mypy src scripts
 python -m pytest -q
 python -m compileall -q src scripts
+python -m build
 git diff --check
 ```
 
-Tests use fake HTTP sessions and do not contact Speechmatics.
+Tests use fake HTTP sessions and do not contact Speechmatics. CI also builds the wheel, installs it
+into a clean virtual environment, runs all three packaged console entry points, and verifies the
+packaged default JSON resource.
 
 ## Official documentation
 
