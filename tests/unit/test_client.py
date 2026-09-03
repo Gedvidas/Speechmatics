@@ -18,10 +18,12 @@ class FakeResponse:
         status_code: int,
         body: object | None = None,
         content: bytes | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.status_code = status_code
         self._body = body
         self.content = content if content is not None else json.dumps(body).encode()
+        self.headers = headers or {}
 
     def json(self) -> object:
         if self._body is None:
@@ -30,13 +32,16 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, responses: list[FakeResponse]) -> None:
+    def __init__(self, responses: list[FakeResponse | requests.RequestException]) -> None:
         self.responses = iter(responses)
         self.calls: list[tuple[str, str, dict[str, Any]]] = []
 
     def _call(self, method: str, url: str, kwargs: dict[str, Any]) -> FakeResponse:
         self.calls.append((method, url, kwargs))
-        return next(self.responses)
+        response = next(self.responses)
+        if isinstance(response, requests.RequestException):
+            raise response
+        return response
 
     def post(self, url: str, **kwargs: Any) -> FakeResponse:
         return self._call("POST", url, kwargs)
@@ -45,8 +50,21 @@ class FakeSession:
         return self._call("GET", url, kwargs)
 
 
-def client_with(session: FakeSession, *, region: str = "eu1") -> SpeechmaticsClient:
-    return SpeechmaticsClient("secret-key-value-123456", region=region, session=cast(requests.Session, session))
+def client_with(
+    session: FakeSession,
+    *,
+    region: str = "eu1",
+    max_retries: int = 4,
+    sleeps: list[float] | None = None,
+) -> SpeechmaticsClient:
+    return SpeechmaticsClient(
+        "secret-key-value-123456",
+        region=region,
+        session=cast(requests.Session, session),
+        max_retries=max_retries,
+        retry_sleeper=(sleeps if sleeps is not None else []).append,
+        retry_random=lambda: 0.5,
+    )
 
 
 def test_create_job_uses_expected_multipart_request(tmp_path: Path) -> None:
@@ -129,6 +147,83 @@ def test_api_error_does_not_expose_authorization_value() -> None:
 
     assert "secret-key-value" not in str(captured.value)
     assert "HTTP 401" in str(captured.value)
+
+
+def test_get_retries_rate_limit_and_honors_retry_after() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(429, {"message": "Rate limited"}, headers={"Retry-After": "3"}),
+            FakeResponse(200, {"job": {"id": "abc123", "status": "done"}}),
+        ]
+    )
+    sleeps: list[float] = []
+
+    body = client_with(session, sleeps=sleeps).get_job("abc123")
+
+    assert body["job"]["status"] == "done"
+    assert sleeps == [3.0]
+    assert len(session.calls) == 2
+
+
+def test_get_retries_network_failure_with_backoff() -> None:
+    session = FakeSession(
+        [
+            requests.ConnectionError("temporary"),
+            FakeResponse(200, {"job": {"id": "abc123", "status": "done"}}),
+        ]
+    )
+    sleeps: list[float] = []
+
+    body = client_with(session, sleeps=sleeps).get_job("abc123")
+
+    assert body["job"]["status"] == "done"
+    assert sleeps == [1.0]
+
+
+def test_get_returns_error_after_retry_exhaustion() -> None:
+    session = FakeSession([FakeResponse(503, None) for _ in range(3)])
+    sleeps: list[float] = []
+
+    with pytest.raises(ApiError, match="HTTP 503"):
+        client_with(session, max_retries=2, sleeps=sleeps).get_job("abc123")
+
+    assert sleeps == [1.0, 2.0]
+    assert len(session.calls) == 3
+
+
+def test_post_retries_explicit_rate_limit_and_rewinds_media(tmp_path: Path) -> None:
+    media = tmp_path / "sample.wav"
+    media.write_bytes(b"audio")
+    session = FakeSession(
+        [
+            FakeResponse(429, {"message": "Rate limited"}, headers={"Retry-After": "2"}),
+            FakeResponse(201, {"id": "abc123def4"}),
+        ]
+    )
+    sleeps: list[float] = []
+
+    result = client_with(session, sleeps=sleeps).create_job(
+        media,
+        {"type": "transcription", "transcription_config": {"language": "en"}},
+    )
+
+    assert result["id"] == "abc123def4"
+    assert sleeps == [2.0]
+    assert len(session.calls) == 2
+
+
+def test_post_network_failure_reports_unknown_outcome_without_retry(tmp_path: Path) -> None:
+    media = tmp_path / "sample.wav"
+    media.write_bytes(b"audio")
+    session = FakeSession([requests.Timeout("ambiguous")])
+
+    with pytest.raises(ApiError, match="outcome is unknown"):
+        client_with(session).create_job(
+            media,
+            {"type": "transcription", "transcription_config": {"language": "en"}},
+        )
+
+    assert len(session.calls) == 1
 
 
 @pytest.mark.parametrize("job_id", ["../secret", "abc-123", "", "jobs/123"])

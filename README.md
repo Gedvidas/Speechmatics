@@ -97,6 +97,11 @@ fields from that JSON file. To change repository-wide defaults, edit
 `src/speechmatics_tools/data/job-defaults.json`; JSON is used because it maps directly to the
 Speechmatics `JobConfig` request without an additional parser or dependency.
 
+Status and transcript GET requests retry transient network failures and HTTP
+`429/500/502/503/504`, honoring `Retry-After` and using capped exponential backoff with jitter.
+Job submission retries only an explicit `429`. A network failure during POST is reported as an
+unknown outcome and is never resubmitted automatically, avoiding accidental duplicate jobs.
+
 ## 2. Poll transcription status
 
 Poll every five seconds for up to 30 minutes:

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import random
 import re
 import time
 from collections.abc import Callable, Iterator, Mapping
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +36,7 @@ SUPPORTED_MEDIA_SUFFIXES = {
     ".flac",
 }
 TERMINAL_STATUSES = {"done", "rejected"}
+RETRYABLE_GET_STATUSES = {429, 500, 502, 503, 504}
 _JOB_ID = re.compile(r"^[A-Za-z0-9]+$")
 
 
@@ -105,10 +109,63 @@ class SpeechmaticsClient:
         *,
         region: str = "eu1",
         session: requests.Session | None = None,
+        max_retries: int = 4,
+        retry_sleeper: Callable[[float], None] = time.sleep,
+        retry_random: Callable[[], float] = random.random,
     ) -> None:
+        if max_retries < 0:
+            raise ValidationError("Retry count cannot be negative.")
         self._endpoint = endpoint_for_region(region)
         self._headers = {"Authorization": f"Bearer {api_key}"}
         self._session = session or requests.Session()
+        self._max_retries = max_retries
+        self._retry_sleeper = retry_sleeper
+        self._retry_random = retry_random
+
+    def _retry_delay(self, attempt: int, response: requests.Response | None = None) -> float:
+        if response is not None:
+            retry_after = response.headers.get("Retry-After")
+            if retry_after:
+                try:
+                    return max(0.0, float(retry_after))
+                except ValueError:
+                    try:
+                        retry_at = parsedate_to_datetime(retry_after)
+                        if retry_at.tzinfo is None:
+                            retry_at = retry_at.replace(tzinfo=UTC)
+                        return max(0.0, (retry_at - datetime.now(UTC)).total_seconds())
+                    except (TypeError, ValueError, OverflowError):
+                        pass
+        base = min(2**attempt, 30)
+        return base * (0.5 + self._retry_random())
+
+    def _get_with_retry(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str | int],
+        failure_message: str,
+        timeout: tuple[int, int],
+    ) -> requests.Response:
+        """Retry idempotent GET operations after transient failures."""
+
+        for attempt in range(self._max_retries + 1):
+            try:
+                response = self._session.get(
+                    url,
+                    headers=self._headers,
+                    params=params,
+                    timeout=timeout,
+                )
+            except requests.RequestException as exc:
+                if attempt >= self._max_retries:
+                    raise ApiError(failure_message) from exc
+                self._retry_sleeper(self._retry_delay(attempt))
+                continue
+            if response.status_code not in RETRYABLE_GET_STATUSES or attempt >= self._max_retries:
+                return response
+            self._retry_sleeper(self._retry_delay(attempt, response))
+        raise AssertionError("Retry loop terminated unexpectedly.")
 
     def _check_response(
         self,
@@ -142,16 +199,25 @@ class SpeechmaticsClient:
         except OSError as exc:
             raise ValidationError(f"Cannot open media file: {path}") from exc
         with handle:
-            try:
-                response = self._session.post(
-                    f"{self._endpoint}/jobs",
-                    headers=self._headers,
-                    data={"config": json.dumps(config, ensure_ascii=False)},
-                    files={"data_file": (path.name, handle, content_type)},
-                    timeout=(10, 600),
-                )
-            except requests.RequestException as exc:
-                raise ApiError("Could not submit the transcription job to Speechmatics.") from exc
+            for attempt in range(self._max_retries + 1):
+                if attempt:
+                    handle.seek(0)
+                try:
+                    response = self._session.post(
+                        f"{self._endpoint}/jobs",
+                        headers=self._headers,
+                        data={"config": json.dumps(config, ensure_ascii=False)},
+                        files={"data_file": (path.name, handle, content_type)},
+                        timeout=(10, 600),
+                    )
+                except requests.RequestException as exc:
+                    raise ApiError(
+                        "The job submission outcome is unknown after a network failure. "
+                        "Do not resubmit until recent Speechmatics jobs have been checked."
+                    ) from exc
+                if response.status_code != 429 or attempt >= self._max_retries:
+                    break
+                self._retry_sleeper(self._retry_delay(attempt, response))
         checked = self._check_response(response, expected_status=201)
         body = self._json_object(checked, context="job creation")
         if not isinstance(body.get("id"), str) or not body["id"]:
@@ -162,15 +228,12 @@ class SpeechmaticsClient:
         """Fetch one job immediately without the endpoint's default wait."""
 
         safe_id = validate_job_id(job_id)
-        try:
-            response = self._session.get(
-                f"{self._endpoint}/jobs/{safe_id}",
-                headers=self._headers,
-                params={"wait": 0},
-                timeout=(10, 60),
-            )
-        except requests.RequestException as exc:
-            raise ApiError("Could not retrieve the Speechmatics job status.") from exc
+        response = self._get_with_retry(
+            f"{self._endpoint}/jobs/{safe_id}",
+            params={"wait": 0},
+            failure_message="Could not retrieve the Speechmatics job status after retries.",
+            timeout=(10, 60),
+        )
         checked = self._check_response(response, expected_status=200)
         body = self._json_object(checked, context="job status")
         job = body.get("job")
@@ -212,15 +275,12 @@ class SpeechmaticsClient:
         except KeyError as exc:
             raise ValidationError("Transcript format must be `json` or `srt`.") from exc
         params: dict[str, str | int] = {"format": api_format, "wait": 0}
-        try:
-            response = self._session.get(
-                f"{self._endpoint}/jobs/{safe_id}/transcript",
-                headers=self._headers,
-                params=params,
-                timeout=(10, 120),
-            )
-        except requests.RequestException as exc:
-            raise ApiError("Could not download the Speechmatics transcript.") from exc
+        response = self._get_with_retry(
+            f"{self._endpoint}/jobs/{safe_id}/transcript",
+            params=params,
+            failure_message="Could not download the Speechmatics transcript after retries.",
+            timeout=(10, 120),
+        )
         checked = self._check_response(response, expected_status=200)
         content = checked.content
         if not content:
