@@ -1,0 +1,14 @@
+{
+  "type": "transcription",
+  "transcription_config": {
+    "language": "en",
+    "model": "standard",
+    "diarization": "speaker"
+  },
+  "tracking": {
+    "title": "Example transcription job",
+    "tags": [
+      "example"
+    ]
+  }
+}
