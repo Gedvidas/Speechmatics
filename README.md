@@ -139,7 +139,8 @@ python scripts\download_transcription.py JOB_ID `
 ```
 
 JSON downloads use Speechmatics `json-v2`; SRT downloads use `srt`. The command validates JSON
-before writing it and uses an atomic replace so interrupted writes do not leave partial files.
+before writing it. For `--format both`, it stages both files first and rolls back the complete pair
+if either replacement fails; `--overwrite` also restores both prior versions on failure.
 
 ## Shared options
 

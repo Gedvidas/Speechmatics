@@ -37,7 +37,7 @@ def write_transcripts(
     *,
     overwrite: bool,
 ) -> list[Path]:
-    """Atomically write all downloaded formats after checking collision policy."""
+    """Write all formats as one rollback-capable local transaction."""
 
     destinations = {name: output_dir / f"{job_id}.{name}" for name in content}
     existing = [path for path in destinations.values() if path.exists()]
@@ -49,19 +49,56 @@ def write_transcripts(
     except OSError as exc:
         raise ValidationError(f"Cannot create transcript directory: {output_dir}") from exc
 
-    written: list[Path] = []
-    for name, payload in content.items():
-        destination = destinations[name]
-        temporary = output_dir / f".{destination.name}.{uuid.uuid4().hex}.tmp"
-        try:
-            temporary.write_bytes(payload)
-            os.replace(temporary, destination)
-        except OSError as exc:
+    temporary_files: dict[str, Path] = {}
+    backup_files: dict[str, Path] = {}
+    installed: list[Path] = []
+    preserve_backups = False
+    try:
+        for name, payload in content.items():
+            destination = destinations[name]
+            temporary = output_dir / f".{destination.name}.{uuid.uuid4().hex}.tmp"
+            temporary_files[name] = temporary
+            with temporary.open("xb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+
+        if overwrite:
+            for name, destination in destinations.items():
+                if destination.exists():
+                    backup = output_dir / f".{destination.name}.{uuid.uuid4().hex}.bak"
+                    os.replace(destination, backup)
+                    backup_files[name] = backup
+
+        for name, destination in destinations.items():
+            os.replace(temporary_files[name], destination)
+            installed.append(destination)
+    except OSError as exc:
+        for destination in reversed(installed):
+            with suppress(OSError):
+                destination.unlink(missing_ok=True)
+        restore_failure: OSError | None = None
+        for name, backup in backup_files.items():
+            if backup.exists():
+                try:
+                    os.replace(backup, destinations[name])
+                except OSError as rollback_exc:
+                    restore_failure = rollback_exc
+        if restore_failure is not None:
+            preserve_backups = True
+            raise ValidationError(
+                f"Transcript transaction failed and rollback was incomplete: {output_dir}"
+            ) from restore_failure
+        raise ValidationError(f"Cannot commit transcript transaction: {output_dir}") from exc
+    finally:
+        for temporary in temporary_files.values():
             with suppress(OSError):
                 temporary.unlink(missing_ok=True)
-            raise ValidationError(f"Cannot write transcript: {destination}") from exc
-        written.append(destination)
-    return written
+        if not preserve_backups:
+            for backup in backup_files.values():
+                with suppress(OSError):
+                    backup.unlink(missing_ok=True)
+    return list(destinations.values())
 
 
 def _run(args: argparse.Namespace) -> int:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from argparse import Namespace
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -98,3 +99,55 @@ def test_write_transcripts_requires_explicit_overwrite(tmp_path: Path) -> None:
         write_transcripts(tmp_path, "abc123", {"json": b"new"}, overwrite=False)
 
     assert existing.read_bytes() == b"original"
+
+
+def test_write_transcripts_rolls_back_when_second_install_fails(tmp_path: Path) -> None:
+    real_replace = __import__("os").replace
+
+    def fail_srt_install(source: Path, destination: Path) -> None:
+        if Path(source).suffix == ".tmp" and Path(destination).suffix == ".srt":
+            raise OSError("injected second install failure")
+        real_replace(source, destination)
+
+    with (
+        patch("speechmatics_tools.download.os.replace", fail_srt_install),
+        pytest.raises(ValidationError, match="transaction"),
+    ):
+        write_transcripts(
+            tmp_path,
+            "abc123",
+            {"json": b"{}", "srt": b"subtitle"},
+            overwrite=False,
+        )
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_write_transcripts_restores_both_originals_when_overwrite_fails(
+    tmp_path: Path,
+) -> None:
+    json_path = tmp_path / "abc123.json"
+    srt_path = tmp_path / "abc123.srt"
+    json_path.write_bytes(b"old-json")
+    srt_path.write_bytes(b"old-srt")
+    real_replace = __import__("os").replace
+
+    def fail_srt_install(source: Path, destination: Path) -> None:
+        if Path(source).suffix == ".tmp" and Path(destination).suffix == ".srt":
+            raise OSError("injected second install failure")
+        real_replace(source, destination)
+
+    with (
+        patch("speechmatics_tools.download.os.replace", fail_srt_install),
+        pytest.raises(ValidationError, match="transaction"),
+    ):
+        write_transcripts(
+            tmp_path,
+            "abc123",
+            {"json": b"new-json", "srt": b"new-srt"},
+            overwrite=True,
+        )
+
+    assert json_path.read_bytes() == b"old-json"
+    assert srt_path.read_bytes() == b"old-srt"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["abc123.json", "abc123.srt"]
