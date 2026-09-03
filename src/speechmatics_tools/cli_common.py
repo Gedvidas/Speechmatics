@@ -29,7 +29,7 @@ def add_connection_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--credentials", help="Plain-text or JSON API-key file.")
     parser.add_argument(
         "--workspace",
-        help="Private workspace (default: SPEECHMATICS_WORKSPACE or .local).",
+        help="Private workspace (environment, source checkout, or per-user data directory).",
     )
     parser.add_argument(
         "--region",

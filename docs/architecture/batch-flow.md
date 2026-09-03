@@ -29,6 +29,8 @@ POST /v2/jobs  --------------------> job id
 ## Boundaries
 
 - `auth.py` resolves `.local`, optional environment variables, and credential formats.
+  The resolver is CWD-independent for a source checkout and uses a stable per-user data directory
+  for an installed wheel.
 - `data/job-defaults.json` is the packaged default `JobConfig`; an explicit `--config` replaces
   it, and selected CLI arguments can override either source.
 - `job_store.py` atomically persists non-secret job identity and region metadata for later commands.

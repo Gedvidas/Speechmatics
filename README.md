@@ -41,7 +41,14 @@ The source key was plain text, so its private repo-local copy was normalized to 
 .local/secrets/speechmatics-api-key.json
 ```
 
-The whole `.local/` directory is ignored by Git. The credentials reader accepts either a plain
+In a source checkout, this `.local/` path is resolved from the repository root even when an
+installed console command is launched from another working directory. In a wheel-only install,
+the stable default is `%LOCALAPPDATA%\SpeechmaticsBatchTools` on Windows and
+`$XDG_DATA_HOME/speechmatics-batch-tools` (or `~/.local/share/speechmatics-batch-tools`) on Unix.
+`--workspace` and `SPEECHMATICS_WORKSPACE` override either default and are normalized to absolute
+paths.
+
+The whole repository `.local/` directory is ignored by Git. The credentials reader accepts either a plain
 text key or a JSON file containing an `api_key` string. To replace the JSON credential manually:
 
 ```powershell
@@ -151,7 +158,9 @@ All three scripts accept:
 - `--region {eu1,eu2,us1,us2,au1}` to select the Speechmatics Batch SaaS endpoint when starting a
   job. Later commands use its saved region automatically.
 
-`SPEECHMATICS_WORKSPACE` and `SPEECHMATICS_REGION` provide environment-variable defaults.
+`SPEECHMATICS_WORKSPACE` and `SPEECHMATICS_REGION` provide environment-variable defaults. One
+shared resolver supplies the same absolute workspace to credential loading, job records, and
+transcript output.
 
 ## Project structure
 

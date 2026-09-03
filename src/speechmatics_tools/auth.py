@@ -9,15 +9,39 @@ from typing import Any
 
 from .errors import CredentialsError
 
-DEFAULT_WORKSPACE = Path(".local")
 DEFAULT_CREDENTIALS_NAME = "speechmatics-api-key.json"
+APPLICATION_DIRECTORY = "speechmatics-batch-tools"
+
+
+def _source_checkout_root() -> Path | None:
+    candidate = Path(__file__).resolve().parents[2]
+    if (candidate / ".git").is_dir() and (
+        candidate / "src" / "speechmatics_tools"
+    ).is_dir():
+        return candidate
+    return None
+
+
+def default_workspace() -> Path:
+    """Return a stable source-checkout or per-user private workspace."""
+
+    source_root = _source_checkout_root()
+    if source_root is not None:
+        return (source_root / ".local").resolve()
+    if os.name == "nt":
+        data_home = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        base = Path(data_home) if data_home else Path.home() / "AppData" / "Local"
+        return (base / "SpeechmaticsBatchTools").resolve()
+    data_home = os.environ.get("XDG_DATA_HOME")
+    base = Path(data_home).expanduser() if data_home else Path.home() / ".local" / "share"
+    return (base / APPLICATION_DIRECTORY).resolve()
 
 
 def resolve_workspace(value: str | None) -> Path:
     """Resolve an explicit, environment, or repository-local private workspace."""
 
     raw = value or os.environ.get("SPEECHMATICS_WORKSPACE")
-    return Path(raw).expanduser() if raw else DEFAULT_WORKSPACE
+    return Path(raw).expanduser().resolve() if raw else default_workspace()
 
 
 def resolve_credentials(workspace: Path, value: str | None) -> Path:

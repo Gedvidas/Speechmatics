@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from speechmatics_tools.auth import load_api_key
+from speechmatics_tools import auth
+from speechmatics_tools.auth import load_api_key, resolve_workspace
 from speechmatics_tools.errors import CredentialsError
 
 
@@ -54,3 +55,23 @@ def test_rejects_invalid_or_placeholder_keys(tmp_path: Path, value: str) -> None
 
     with pytest.raises(CredentialsError):
         load_api_key(credentials=str(secret))
+
+
+def test_source_checkout_default_workspace_is_absolute_and_cwd_independent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SPEECHMATICS_WORKSPACE", raising=False)
+    expected = Path(auth.__file__).resolve().parents[2] / ".local"
+
+    monkeypatch.chdir(tmp_path)
+
+    assert resolve_workspace(None) == expected.resolve()
+    assert resolve_workspace(None).is_absolute()
+
+
+def test_explicit_relative_workspace_is_normalized_to_absolute_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert resolve_workspace("private-data") == (tmp_path / "private-data").resolve()

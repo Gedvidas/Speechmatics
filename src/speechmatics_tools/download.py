@@ -106,10 +106,11 @@ def _run(args: argparse.Namespace) -> int:
     client = connection.client
     formats = ("json", "srt") if args.format == "both" else (args.format,)
     downloaded = {name: client.download_transcript(args.job_id, name) for name in formats}
-    workspace = Path(args.workspace).expanduser() if args.workspace else Path(
-        os.environ.get("SPEECHMATICS_WORKSPACE", ".local")
-    ).expanduser()
-    output_dir = Path(args.output_dir).expanduser() if args.output_dir else workspace / "transcripts"
+    output_dir = (
+        Path(args.output_dir).expanduser().resolve()
+        if args.output_dir
+        else connection.workspace / "transcripts"
+    )
     paths = write_transcripts(output_dir, args.job_id, downloaded, overwrite=args.overwrite)
     print_json(
         {
