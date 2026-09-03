@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from pathlib import Path
 
-from .cli_common import add_connection_arguments, client_from_args, print_json, run_command
+from .cli_common import add_connection_arguments, connection_from_args, print_json, run_command
 from .errors import ValidationError
 
 
@@ -65,7 +65,8 @@ def write_transcripts(
 
 
 def _run(args: argparse.Namespace) -> int:
-    client = client_from_args(args)
+    connection = connection_from_args(args, job_id=args.job_id)
+    client = connection.client
     formats = ("json", "srt") if args.format == "both" else (args.format,)
     downloaded = {name: client.download_transcript(args.job_id, name) for name in formats}
     workspace = Path(args.workspace).expanduser() if args.workspace else Path(
@@ -73,7 +74,13 @@ def _run(args: argparse.Namespace) -> int:
     ).expanduser()
     output_dir = Path(args.output_dir).expanduser() if args.output_dir else workspace / "transcripts"
     paths = write_transcripts(output_dir, args.job_id, downloaded, overwrite=args.overwrite)
-    print_json({"job_id": args.job_id, "files": [str(path) for path in paths]})
+    print_json(
+        {
+            "job_id": args.job_id,
+            "region": connection.region,
+            "files": [str(path) for path in paths],
+        }
+    )
     return 0
 
 

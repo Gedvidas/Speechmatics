@@ -11,12 +11,13 @@ from typing import Any
 
 from .cli_common import (
     add_connection_arguments,
-    client_from_args,
+    connection_from_args,
     print_json,
     require_json_object,
     run_command,
 )
 from .errors import ValidationError
+from .job_store import save_job_record
 
 DEFAULT_CONFIG_RESOURCE = "data/job-defaults.json"
 
@@ -82,8 +83,23 @@ def load_config(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _run(args: argparse.Namespace) -> int:
-    response = client_from_args(args).create_job(Path(args.media).expanduser(), load_config(args))
-    print_json(response)
+    media = Path(args.media).expanduser()
+    connection = connection_from_args(args)
+    response = connection.client.create_job(media, load_config(args))
+    job_id = response["id"]
+    try:
+        record_path = save_job_record(
+            connection.workspace,
+            job_id=job_id,
+            region=connection.region,
+            data_name=media.name,
+        )
+    except ValidationError as exc:
+        raise ValidationError(
+            f"Job `{job_id}` was created in `{connection.region}`, but its local record could not "
+            "be saved. Do not resubmit the media."
+        ) from exc
+    print_json({**response, "region": connection.region, "record": str(record_path)})
     return 0
 
 

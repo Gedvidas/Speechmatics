@@ -87,8 +87,11 @@ python scripts\start_transcription.py "C:\media\interview.mp3" `
   --title "Interview 2026-09-03"
 ```
 
-The command prints the Speechmatics creation response, including the job `id`. For advanced
-features, copy and edit `examples/job-config.example.json`, then submit it with `--config`.
+The command prints the Speechmatics creation response, including the job `id`, selected `region`,
+and local record path. It also stores non-secret resume metadata in `.local/jobs/JOB_ID.json`.
+Poll and download read the saved region automatically, so a non-EU1 job cannot silently fall back
+to EU1. An explicit conflicting `--region` is rejected. For advanced features, copy and edit
+`examples/job-config.example.json`, then submit it with `--config`.
 Explicit `--language`, `--model`, `--diarization`, and `--title` options override the matching
 fields from that JSON file. To change repository-wide defaults, edit
 `src/speechmatics_tools/data/job-defaults.json`; JSON is used because it maps directly to the
@@ -139,7 +142,8 @@ All three scripts accept:
 
 - `--credentials PATH` for a specific text or JSON API-key file;
 - `--workspace PATH` to move the private workspace from `.local`;
-- `--region {eu1,eu2,us1,us2,au1}` to select the Speechmatics Batch SaaS endpoint.
+- `--region {eu1,eu2,us1,us2,au1}` to select the Speechmatics Batch SaaS endpoint when starting a
+  job. Later commands use its saved region automatically.
 
 `SPEECHMATICS_WORKSPACE` and `SPEECHMATICS_REGION` provide environment-variable defaults.
 

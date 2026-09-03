@@ -8,6 +8,10 @@ media file + JobConfig
         |
         v
 POST /v2/jobs  --------------------> job id
+        |                                 |
+        |                                 v
+        +----------------------> .local/jobs/{job_id}.json
+                                      (region + safe metadata)
                                           |
                                           v
                               GET /v2/jobs/{job_id}?wait=0
@@ -27,6 +31,7 @@ POST /v2/jobs  --------------------> job id
 - `auth.py` resolves `.local`, optional environment variables, and credential formats.
 - `data/job-defaults.json` is the packaged default `JobConfig`; an explicit `--config` replaces
   it, and selected CLI arguments can override either source.
+- `job_store.py` atomically persists non-secret job identity and region metadata for later commands.
 - `client.py` validates job IDs, media types, configuration, regional endpoints, response status,
   and transcript content.
 - `start.py`, `poll.py`, and `download.py` translate command-line options into client calls and

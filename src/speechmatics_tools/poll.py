@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 
-from .cli_common import add_connection_arguments, client_from_args, print_json, run_command
+from .cli_common import add_connection_arguments, connection_from_args, print_json, run_command
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _run(args: argparse.Namespace) -> int:
-    client = client_from_args(args)
+    client = connection_from_args(args, job_id=args.job_id).client
     if args.once:
         print_json(client.get_job(args.job_id))
         return 0

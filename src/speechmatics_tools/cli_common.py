@@ -7,10 +7,20 @@ import json
 import os
 import sys
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
 
-from .auth import load_api_key
-from .client import REGION_ENDPOINTS, SpeechmaticsClient
+from .auth import load_api_key, resolve_workspace
+from .client import REGION_ENDPOINTS, SpeechmaticsClient, endpoint_for_region
 from .errors import SpeechmaticsToolsError, ValidationError
+from .job_store import load_job_record
+
+
+@dataclass(frozen=True)
+class Connection:
+    client: SpeechmaticsClient
+    workspace: Path
+    region: str
 
 
 def add_connection_arguments(parser: argparse.ArgumentParser) -> None:
@@ -21,22 +31,47 @@ def add_connection_arguments(parser: argparse.ArgumentParser) -> None:
         "--workspace",
         help="Private workspace (default: SPEECHMATICS_WORKSPACE or .local).",
     )
-    default_region = os.environ.get("SPEECHMATICS_REGION", "eu1").lower()
-    if default_region not in REGION_ENDPOINTS:
-        default_region = "eu1"
     parser.add_argument(
         "--region",
         choices=tuple(REGION_ENDPOINTS),
-        default=default_region,
-        help="Batch SaaS region; use the same region for every operation on a job.",
+        default=None,
+        help="Batch SaaS region (saved job region, SPEECHMATICS_REGION, or eu1).",
     )
 
 
-def client_from_args(args: argparse.Namespace) -> SpeechmaticsClient:
-    """Create an authenticated client from shared parsed arguments."""
+def resolve_region(value: str | None) -> str:
+    """Resolve and validate an explicit, environment, or default region."""
 
-    api_key = load_api_key(workspace=args.workspace, credentials=args.credentials)
-    return SpeechmaticsClient(api_key, region=args.region)
+    region = (value or os.environ.get("SPEECHMATICS_REGION") or "eu1").lower()
+    endpoint_for_region(region)
+    return region
+
+
+def connection_from_args(
+    args: argparse.Namespace,
+    *,
+    job_id: str | None = None,
+) -> Connection:
+    """Resolve credentials, workspace, and the correct endpoint for a command."""
+
+    workspace = resolve_workspace(args.workspace)
+    explicit_region = args.region
+    record = load_job_record(workspace, job_id) if job_id else None
+    if record is not None:
+        saved_region = record["region"]
+        if explicit_region is not None and explicit_region != saved_region:
+            raise ValidationError(
+                f"Job `{job_id}` was created in `{saved_region}`, not `{explicit_region}`."
+            )
+        region = saved_region
+    else:
+        region = resolve_region(explicit_region)
+    api_key = load_api_key(workspace=str(workspace), credentials=args.credentials)
+    return Connection(
+        client=SpeechmaticsClient(api_key, region=region),
+        workspace=workspace,
+        region=region,
+    )
 
 
 def print_json(value: object) -> None:

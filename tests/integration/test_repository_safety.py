@@ -18,6 +18,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
         ".local/media/customer-interview.mp3",
         ".local/transcripts/abc123.json",
         ".local/transcripts/abc123.srt",
+        ".local/jobs/abc123.json",
         "speechmatics-api-key.json",
         "customer-interview.wav",
         "customer-interview.mp4",
