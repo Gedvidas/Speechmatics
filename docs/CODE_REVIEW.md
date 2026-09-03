@@ -7,6 +7,22 @@ Reviewed commit: `a172fc7` (`main`)
 Scope: tracked application code, CLI behavior, tests, packaging, CI, documentation, and repository
 safety. No implementation fixes are included in this review.
 
+## Resolution follow-up
+
+All six findings were fixed on 2026-09-03 after the original review. Each issue was implemented
+and verified separately:
+
+| Finding | Status | Fix commit |
+| --- | --- | --- |
+| CR-01 | Resolved | `2164402` — protect media and credentials from Git |
+| CR-02 | Resolved | `ed22b01` — persist job region metadata |
+| CR-03 | Resolved | `d1b539d` — retry transient Speechmatics requests safely |
+| CR-04 | Resolved | `06da031` — make transcript pair writes transactional |
+| CR-05 | Resolved | `48fdf7a` — stabilize private workspace resolution |
+| CR-06 | Resolved | `f4125ec` — verify built package artifacts in CI |
+
+The findings below remain as the evidence and rationale captured at review time.
+
 ## Executive summary
 
 The three-command workflow is small, readable, and works end to end. Authentication is kept out
