@@ -85,6 +85,7 @@ def test_create_job_uses_expected_multipart_request(tmp_path: Path) -> None:
     assert kwargs["headers"]["Authorization"] == "Bearer secret-key-value-123456"
     assert json.loads(kwargs["data"]["config"]) == config
     assert kwargs["files"]["data_file"][0] == "sample.mp3"
+    assert kwargs["timeout"] == (120, 600)
 
 
 def test_get_job_uses_same_selected_region_and_no_server_wait() -> None:

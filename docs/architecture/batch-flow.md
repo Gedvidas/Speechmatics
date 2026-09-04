@@ -35,7 +35,8 @@ POST /v2/jobs  --------------------> job id
   it, and selected CLI arguments can override either source.
 - `job_store.py` atomically persists non-secret job identity and region metadata for later commands.
 - `client.py` validates job IDs, media types, configuration, regional endpoints, response status,
-  and transcript content.
+  and transcript content. Multipart POST uses a longer socket timeout than ordinary connection
+  setup because large media bodies can encounter temporary upload stalls.
 - `start.py`, `poll.py`, and `download.py` translate command-line options into client calls and
   stable exit codes.
 - `scripts/` contains only executable wrappers so the same behavior is available through the
@@ -44,3 +45,7 @@ POST /v2/jobs  --------------------> job id
 The API key is sent only in the `Authorization: Bearer ...` request header. The client never adds
 it to a URL, response object, output JSON, or exception. Follow-up operations must use the same
 region that accepted the original job.
+
+Job creation is deliberately not retried after a network exception because the POST outcome may
+be unknown. Callers should provide a unique tracking title, inspect recent jobs in the same region,
+and reconcile that identity before deciding whether another submission is safe.

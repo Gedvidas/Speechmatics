@@ -208,7 +208,11 @@ class SpeechmaticsClient:
                         headers=self._headers,
                         data={"config": json.dumps(config, ensure_ascii=False)},
                         files={"data_file": (path.name, handle, content_type)},
-                        timeout=(10, 600),
+                        # urllib3 keeps the connect timeout on the socket while
+                        # sending the multipart request body. Large WAV uploads
+                        # can therefore time out during a temporary 10-second
+                        # upload stall even though the connection is healthy.
+                        timeout=(120, 600),
                     )
                 except requests.RequestException as exc:
                     raise ApiError(

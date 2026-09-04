@@ -26,7 +26,7 @@ polling, and downloading a particular job. Available values are `eu1`, `eu2`, `u
 PowerShell:
 
 ```powershell
-cd C:\Users\gedvi\Documents\GitHub\Upload\Speechmatics
+cd C:\Users\gedvi\Documents\GitHub\Clipping\Transcribe\Speechmatics
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -108,6 +108,19 @@ Status and transcript GET requests retry transient network failures and HTTP
 `429/500/502/503/504`, honoring `Retry-After` and using capped exponential backoff with jitter.
 Job submission retries only an explicit `429`. A network failure during POST is reported as an
 unknown outcome and is never resubmitted automatically, avoiding accidental duplicate jobs.
+Multipart upload uses a 120-second socket timeout and a 600-second response timeout so large WAV
+files tolerate temporary upload stalls. This does not weaken the unknown-outcome safeguard.
+
+### Recovering an unknown submit outcome
+
+If `start_transcription.py` reports that the submission outcome is unknown, do not immediately
+submit the media again. The server may have accepted the POST even though the client did not
+receive its response. First list recent jobs in the same region and match the submitted
+`tracking.title`, media name, and creation time. Resume polling with the existing job ID if a
+match is found; submit a new job only after confirming that no matching recent job exists.
+
+For orchestrated runs, always set a unique `--title`. The Clipping Step 4–6 runner uses its local
+test job ID for that title, making this reconciliation deterministic.
 
 ## 2. Poll transcription status
 
